@@ -1,63 +1,38 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-from sklearn.linear_model import LinearRegression # 追加: 機械学習モデル
+import requests
 
-st.title("World Happiness Report - EDA Dashboard")
-st.write("データセットの探索的データ分析（EDA）と幸福度の予測シミュレーションを行うダッシュボードです。")
+st.title("Well-being Digital Twin Dashboard")
+st.write("マクロな統計データと、個人の生理的データ（心拍変動・内受容感覚）を掛け合わせて幸福度を予測するデジタルツインのプロトタイプです。")
 
-@st.cache_data
-def load_data():
+st.header("1. Digital Twin Parameters")
+st.write("ウェアラブルデバイス等から取得される生理心理学的な指標をシミュレーションします。")
+
+# 3つのスライダーを横並びに配置
+col1, col2, col3 = st.columns(3)
+with col1:
+    user_gdp = st.slider("GDP (マクロ経済)", 0.5, 2.0, 1.2)
+with col2:
+    user_hrv = st.slider("HRV (心拍変動)", 20.0, 100.0, 60.0, help="ストレスが低いと高くなる傾向があります")
+with col3:
+    user_intero = st.slider("Interoception (内受容感覚)", 0.0, 1.0, 0.5, help="自身の身体の内部状態を正確に知覚する能力")
+
+st.header("2. Predict Well-being Score")
+
+if st.button("デジタルツインによる幸福度予測を実行 (Run Prediction)"):
+    API_URL = "http://127.0.0.1:8000/predict/"
+    # 3つのパラメータをバックエンドに送信
+    payload = {
+        "gdp": user_gdp,
+        "hrv": user_hrv,
+        "interoception": user_intero
+    }
+    
     try:
-        df = pd.read_csv("world_happiness.csv")
-    except FileNotFoundError:
-        st.warning("CSVファイルが見つからないため、デモ用のデータを生成しています。")
-        np.random.seed(42)
-        gdp = np.random.uniform(0.5, 2.0, 50)
-        score = 3.0 + 2.5 * gdp + np.random.normal(0, 0.5, 50)
-        df = pd.DataFrame({
-            "Country": [f"Country_{i}" for i in range(1, 51)],
-            "Happiness_Score": score,
-            "GDP_per_capita": gdp,
-            "Social_support": np.random.uniform(0.5, 1.5, 50)
-        })
-    return df
-
-df = load_data()
-
-st.subheader("1. データセットの確認")
-st.dataframe(df.head())
-
-st.subheader("2. 記述統計量 (Descriptive Statistics)")
-st.write(df.describe())
-
-st.subheader("3. GDPと幸福度の関係性")
-st.scatter_chart(data=df, x="GDP_per_capita", y="Happiness_Score")
-
-# --- ここから下が Step 3 で追加された機械学習セクション ---
-
-st.header("4. 幸福度の予測シミュレーション (Machine Learning)")
-st.write("Scikit-learnの回帰モデル(Linear Regression)を用いて、GDPから幸福度を予測します。")
-
-# Prepare data (特徴量Xとターゲットyの準備)
-X = df[["GDP_per_capita"]]
-y = df["Happiness_Score"]
-
-# Train the model (モデルの学習)
-model = LinearRegression()
-model.fit(X, y)
-
-# Interactive UI (スライダーでユーザーが値を操作)
-st.subheader("GDPを動かして幸福度を予測してみよう")
-min_gdp = float(df["GDP_per_capita"].min())
-max_gdp = float(df["GDP_per_capita"].max())
-mean_gdp = float(df["GDP_per_capita"].mean())
-
-# Create a slider
-user_gdp = st.slider("GDP per capita (1人当たりGDP)", min_value=min_gdp, max_value=max_gdp, value=mean_gdp)
-
-# Predict based on user input (ユーザーの入力値をもとに予測)
-prediction = model.predict([[user_gdp]])
-
-# Show the result (結果の表示)
-st.success(f"予測される幸福度スコア (Predicted Happiness Score): **{prediction[0]:.2f}**")
+        response = requests.post(API_URL, json=payload)
+        if response.status_code == 200:
+            result = response.json()
+            st.success(f"予測される個人のウェルビーイングスコア: **{result['predicted_score']:.2f}**")
+        else:
+            st.error("APIからエラーが返されました。")
+    except requests.exceptions.ConnectionError:
+        st.error("APIサーバーに接続できません。裏側でFastAPIが起動しているか確認してください。")
